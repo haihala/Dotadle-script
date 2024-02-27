@@ -99,6 +99,10 @@ elif output_mode == "csv":
             "Average pool size",
             "Score(sum of 1/pool size)",
         ]))
+elif output_mode == "unambiguous":
+    print("Guessed hero: ")
+    print("Comma separated list of unambiguous answers")
+    print()
 
 
 for guess in cont:
@@ -153,3 +157,11 @@ for guess in cont:
         ]
 
         print(",".join(line))
+
+    if output_mode == "unambiguous":
+        unambiguous = [hero for hero,
+                       plausibles in pools.items() if len(plausibles) == 1]
+
+        print(f'{guess["championName"]}: ')
+        print(", ".join(unambiguous))
+        print()

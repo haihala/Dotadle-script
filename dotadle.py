@@ -8,6 +8,7 @@ if len(sys.argv) == 1:
     print("verbose - human readable output")
     print("csv - csv")
     print("csv-nohead - csv without heading row")
+    print("scores - All heroes sorted by their scores")
     exit()
 
 output_mode = sys.argv[1]
@@ -105,6 +106,8 @@ elif output_mode == "unambiguous":
     print()
 
 
+scores = {}
+
 for guess in cont:
     pools = {}
     for answer in cont:
@@ -134,6 +137,8 @@ for guess in cont:
             worst_case = (key, plausibles)
         sum_case += value
         score += 1/value
+
+    scores[guess["championName"]] = score
 
     if output_mode == "verbose":
         print(guess["championName"])
@@ -165,3 +170,13 @@ for guess in cont:
         print(f'{guess["championName"]}: ')
         print(", ".join(unambiguous))
         print()
+
+if output_mode == "score":
+    print("Scores of heroes, bigger is better")
+    ordered = sorted(
+        [(key, value) for key, value in scores.items()],
+        key=lambda pair: pair[1]
+    )
+
+    for (hero, score) in ordered:
+        print(f"{hero}: {score}")

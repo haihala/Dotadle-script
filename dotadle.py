@@ -1,63 +1,97 @@
 #!/usr/bin/env python
 from dataclasses import dataclass
+
+import argparse
 import json
-import sys
+import math
 
-if len(sys.argv) == 1:
-    print("Please provide output mode. One of:")
-    print("verbose - human readable output")
-    print("csv - csv")
-    print("csv-nohead - csv without heading row")
-    print("scores - All heroes sorted by their scores")
-    exit()
 
-output_mode = sys.argv[1]
+def main():
+    args = parse_args()
+    output = simulate(args)
+    present(args, output)
 
-handle = open("dotadle.json")
-cont = json.load(handle)
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog='Dotadle calculator',
+        description='Calculates things about https://dotadle.net/'
+    )
+
+    parser.add_argument(
+        'output_format',
+        choices=['csv', 'basic', 'score', 'verbose', 'unambiguous'],
+    )
+    parser.add_argument('--header', action='store_true')
+    parser.add_argument('--input_file', default='dotadle.json')
+
+    return parser.parse_args()
+
+
+def simulate(args):
+    handle = open(args.input_file)
+    cont = json.load(handle)
+    output = []
+
+    for guess in cont:
+        plausibles = {}
+        for answer in cont:
+            if answer == guess:
+                continue
+
+            guess_info = GuessInformation(answer, guess)
+            plausibles[answer['championName']] = [
+                candidate['championName']
+                for candidate in cont
+                if guess_info.plausible(candidate) and candidate != guess
+            ]
+
+        output.append(Output(guess['championName'], plausibles))
+
+    return output
 
 
 @dataclass
-class ListAttributeData:
+class ListAttributeInformation:
     exact: bool
     partial: bool
 
 
-class Data:
+class GuessInformation:
     def __init__(self, answer, guess):
         self.guess = guess
         self.simple_traits = {
             key: answer[key] == guess[key]
             for key in [
-                "gender",
-                "attribute",
-                "rangeType",
-                "complexity",
+                'gender',
+                'attribute',
+                'rangeType',
+                'complexity',
             ]
         }
 
-        if guess["releaseYear"] == answer["releaseYear"]:
-            self.year_range = [guess["releaseYear"]]
-        elif guess["releaseYear"] > answer["releaseYear"]:
-            self.year_range = list(range(2004, guess["releaseYear"]))
+        if guess['releaseYear'] == answer['releaseYear']:
+            self.year_range = [guess['releaseYear']]
+        elif guess['releaseYear'] > answer['releaseYear']:
+            self.year_range = list(range(2004, guess['releaseYear']))
         else:
-            self.year_range = list(range(guess["releaseYear"]+1, 2025))
+            self.year_range = list(range(guess['releaseYear']+1, 2025))
 
         self.list_traits = {
-            key: ListAttributeData(
+            key: ListAttributeInformation(
                 exact=(set(answer[key]) == set(guess[key])),
                 partial=(
                     len(set(answer[key]).intersection(set(guess[key]))) > 0)
             )
-            for key in ["species", "lane"]
+            for key in ['species', 'lane']
         }
 
     def plausible(self, hero):
         for key in [
-                "gender",
-                "attribute",
-                "rangeType",
-                "complexity",
+                'gender',
+                'attribute',
+                'rangeType',
+                'complexity',
         ]:
             if self.simple_traits[key]:
                 # Only plausible if exact match
@@ -68,10 +102,10 @@ class Data:
                 if hero[key] == self.guess[key]:
                     return False
 
-        if hero["releaseYear"] not in self.year_range:
+        if hero['releaseYear'] not in self.year_range:
             return False
 
-        for key in ["species", "lane"]:
+        for key in ['species', 'lane']:
             lad = self.list_traits[key]
             if lad.exact:
                 # Must match exactly
@@ -85,98 +119,172 @@ class Data:
         return True
 
 
-if output_mode == "verbose":
-    print(f"Total heroes {len(cont)}")
-elif output_mode == "csv":
-    print(
-        ",".join([
-            "Hero",
-            "Best case pool size",
-            "Best case hero",
-            "Best case pool",
-            "Worst case pool size",
-            "Worst case hero",
-            "Worst case pool",
-            "Average pool size",
-            "Score(sum of 1/pool size)",
-        ]))
-elif output_mode == "unambiguous":
-    print("Guessed hero: ")
-    print("Comma separated list of unambiguous answers")
+class Output:
+    def __init__(self, hero, data):
+        self.hero = hero
+        self.data = data
+
+        self.average_plausibles = sum(
+            len(plausibles)
+            for plausibles
+            in data.values()
+        ) / len(data)
+
+        self.score = sum(
+            1/len(plausibles)
+            for answer, plausibles
+            in data.items()
+        )
+
+        self.best_case = math.inf
+        self.best_answers = []
+
+        self.worst_case = 0
+        self.worst_answers = []
+
+        for answer, plausibles in data.items():
+            lp = len(plausibles)
+
+            if lp < self.best_case:
+                self.best_case = lp
+                self.best_answers = [answer]
+            elif lp == self.best_case:
+                self.best_answers.append(answer)
+
+            if lp > self.worst_case:
+                self.worst_case = lp
+                self.worst_answers = [answer]
+            elif lp == self.worst_case:
+                self.worst_answers.append(answer)
+
+    def present_basic(self):
+        print(self.hero)
+        print(f'Narrowest plausible pool: {self.best_case}')
+        print(f'Narrowest plausible pool answers: {self.best_answers}')
+        print(f'Widest plausible pool: {self.worst_case}')
+        print(f'Widest plausible pool answers: {self.worst_answers}')
+        print(f'Average plausibles: {self.average_plausibles}')
+        print(f'Score: {self.score}')
+        print()
+
+    def present_verbose(self):
+        print(self.hero)
+        for pool in range(self.best_case, self.worst_case+1):
+            heroes = [
+                answer
+                for answer, plausibles
+                in self.data.items()
+                if len(plausibles) == pool
+            ]
+            if heroes:
+                out = ', '.join(heroes)
+                print(f'{pool}: {out}')
+
+        print(f'Average plausibles: {self.average_plausibles}')
+        print(f'Score: {self.score}')
+        print()
+
+    def present_csv(self):
+        line = [
+            self.hero,
+            str(self.best_case),
+            ';'.join(self.best_answers),
+            str(self.worst_case),
+            ';'.join(self.worst_answers),
+            str(self.average_plausibles),
+            str(self.score),
+        ]
+
+        print(','.join(line))
+
+    def present_unambiguous(self):
+        unambiguous = {
+            answer
+            for answer, plausibles
+            in self.data.items()
+            if plausibles == [answer]
+        }
+        print(f'{self.hero}: ')
+        print(', '.join(unambiguous))
+        print()
+
+
+def present(args, data):
+    if args.header:
+        present_header(args)
+
+    present_data(args, data)
+
+
+def present_header(args):
+    match args.output_format:
+        case 'basic':
+            print('Hero name')
+            print('Narrowest plausible pool: integer')
+            print('Narrowest plausible pool answers: list of heroes')
+            print('Widest plausible pool: integer')
+            print('Widest plausible pool answers: list of heroes')
+            print('Average plausibles: float')
+            print('Score: sum of 1/plausibles for all answers, float')
+
+        case 'verbose':
+            print('Hero name')
+            print('Narrowest plausible pool: integer')
+            print('Narrowest plausible pool answers: list of heroes')
+            print('Widest plausible pool: integer')
+            print('Widest plausible pool answers: list of heroes')
+            print('Average plausibles: float')
+            print('Score: sum of 1/plausibles for all answers, float')
+
+        case 'csv':
+            print(
+                ','.join([
+                    'Hero',
+                    'Best case plausible amount',
+                    'Answers with best case plausibles',
+                    'Worst case plausible amount',
+                    'Answers with worst case plausibles',
+                    'Average pool size',
+                    'Score(sum of 1/pool size)',
+                ]))
+
+        case 'unambiguous':
+            print('Guessed hero: ')
+            print('Comma separated list of unambiguous answers')
+
+        case 'score':
+            print('Scores of heroes, bigger is better')
+
     print()
 
 
-scores = {}
+def present_data(args, data):
+    match args.output_format:
+        case 'basic':
+            for result in data:
+                result.present_basic()
 
-for guess in cont:
-    pools = {}
-    for answer in cont:
-        if answer == guess:
-            continue
+        case 'verbose':
+            for result in data:
+                result.present_verbose()
 
-        data = Data(answer, guess)
-        plausibles = [
-            candidate["championName"]
-            for candidate in cont
-            if data.plausible(candidate) and candidate != guess
-        ]
+        case 'csv':
+            for result in data:
+                result.present_csv()
 
-        pools[answer["championName"]] = plausibles
+        case 'unambiguous':
+            for result in data:
+                result.present_unambiguous()
 
-    best_case = None
-    worst_case = None
-    sum_case = 0
-    score = 0
+        case 'score':
+            ordered = sorted(
+                data,
+                key=lambda output: -output.score
+            )
 
-    for key, plausibles in pools.items():
-        value = len(plausibles)
-        if best_case is None or value < len(best_case[1]):
-            best_case = (key, plausibles)
+            for output in ordered:
+                print(f'{output.hero}: {output.score}')
 
-        if worst_case is None or value > len(worst_case[1]):
-            worst_case = (key, plausibles)
-        sum_case += value
-        score += 1/value
 
-    scores[guess["championName"]] = score
-
-    if output_mode == "verbose":
-        print(guess["championName"])
-        print(f"Best: {len(best_case[1])} ({best_case[0]})", best_case[1])
-        print(f"Worst: {len(worst_case[1])} ({worst_case[0]}", worst_case[1])
-        print(f"Average: {sum_case/len(cont)}")
-        print(f"Score: {score}")
-        print()
-
-    if output_mode.startswith("csv"):
-        line = [
-            guess["championName"],
-            best_case[0],
-            str(len(best_case[1])),
-            ";".join(best_case[1]),
-            worst_case[0],
-            str(len(worst_case[1])),
-            ";".join(worst_case[1]),
-            str(sum_case/len(cont)),
-            str(score),
-        ]
-
-        print(",".join(line))
-
-    if output_mode == "unambiguous":
-        unambiguous = [hero for hero,
-                       plausibles in pools.items() if len(plausibles) == 1]
-
-        print(f'{guess["championName"]}: ')
-        print(", ".join(unambiguous))
-        print()
-
-if output_mode == "score":
-    print("Scores of heroes, bigger is better")
-    ordered = sorted(
-        [(key, value) for key, value in scores.items()],
-        key=lambda pair: pair[1]
-    )
-
-    for (hero, score) in ordered:
-        print(f"{hero}: {score}")
+if __name__ == '__main__':
+    main()

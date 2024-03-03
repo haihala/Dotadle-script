@@ -20,7 +20,7 @@ def parse_args():
 
     parser.add_argument(
         'output_format',
-        choices=['csv', 'basic', 'score', 'verbose', 'unambiguous'],
+        choices=['csv', 'basic', 'score', 'verbose', 'unambiguous', 'hardest'],
     )
     parser.add_argument('--header', action='store_true')
     parser.add_argument('--input_file', default='dotadle.json')
@@ -255,6 +255,9 @@ def present_header(args):
         case 'score':
             print('Scores of heroes, bigger is better')
 
+        case 'hardest':
+            print('Average plausibles for each answer, bigger is harder')
+
     print()
 
 
@@ -284,6 +287,23 @@ def present_data(args, data):
 
             for output in ordered:
                 print(f'{output.hero}: {output.score}')
+
+        case 'hardest':
+            answer_score = {}
+            for result in data:
+                for answer, plausibles in result.data.items():
+                    if answer in answer_score:
+                        answer_score[answer] += len(plausibles)
+                    else:
+                        answer_score[answer] = len(plausibles)
+
+            ordered = sorted(
+                answer_score.items(),
+                key=lambda pair: pair[1]
+            )
+
+            for answer, total in ordered:
+                print(f'{answer}: {total/len(answer_score)}')
 
 
 if __name__ == '__main__':

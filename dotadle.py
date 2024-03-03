@@ -8,8 +8,8 @@ import math
 
 def main():
     args = parse_args()
-    output = simulate(args)
-    present(args, output)
+    output = simulate(args.input_file)
+    present(args.output_format, args.header, output)
 
 
 def parse_args():
@@ -28,8 +28,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def simulate(args):
-    handle = open(args.input_file)
+def simulate(input_file):
+    handle = open(input_file)
     cont = json.load(handle)
     output = []
 
@@ -209,15 +209,15 @@ class Output:
         print()
 
 
-def present(args, data):
-    if args.header:
-        present_header(args)
+def present(output_format, header, data):
+    if header:
+        present_header(output_format)
 
-    present_data(args, data)
+    present_data(output_format, data)
 
 
-def present_header(args):
-    match args.output_format:
+def present_header(output_format):
+    match output_format:
         case 'basic':
             print('Hero name')
             print('Narrowest plausible pool: integer')
@@ -261,8 +261,8 @@ def present_header(args):
     print()
 
 
-def present_data(args, data):
-    match args.output_format:
+def present_data(output_format, data):
+    match output_format:
         case 'basic':
             for result in data:
                 result.present_basic()

@@ -29,26 +29,26 @@ def parse_args():
 
 
 def simulate(input_file):
-    handle = open(input_file)
-    cont = json.load(handle)
-    output = []
+    with open(input_file) as handle:
+        cont = json.load(handle)
+        output = []
 
-    for guess in cont:
-        plausibles = {}
-        for answer in cont:
-            if answer == guess:
-                continue
+        for guess in cont:
+            plausibles = {}
+            for answer in cont:
+                if answer == guess:
+                    continue
 
-            guess_info = GuessInformation(answer, guess)
-            plausibles[answer['championName']] = [
-                candidate['championName']
-                for candidate in cont
-                if guess_info.plausible(candidate) and candidate != guess
-            ]
+                guess_info = GuessInformation(answer, guess)
+                plausibles[answer['championName']] = [
+                    candidate['championName']
+                    for candidate in cont
+                    if guess_info.plausible(candidate) and candidate != guess
+                ]
 
-        output.append(Output(guess['championName'], plausibles))
+            output.append(Output(guess['championName'], plausibles))
 
-    return output
+        return output
 
 
 @dataclass
